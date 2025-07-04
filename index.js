@@ -163,17 +163,6 @@ app.get('/api/appointments/count', (req, res) => {
   });
 });
 
-// Serve static files from the React app (for production deployment)
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  app.use(express.static(path.join(__dirname, 'client', 'build')));
-  
-  // Handle React routing, return all requests to React app
-  app.get('/*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
-  });
-}
-
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 }); 
