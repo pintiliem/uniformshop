@@ -5,10 +5,15 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Add a simple health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Configure CORS to allow requests from your frontend domain
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://uniformshop.onrender.com', 'https://uniformshop-be.onrender.com']
+    ? [process.env.FRONTEND_URL || 'https://uniformshop-production.up.railway.app']
     : ['http://localhost:3000'],
   credentials: true
 }));

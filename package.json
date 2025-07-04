@@ -5,7 +5,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "postinstall": "npm rebuild sqlite3"
+    "dev": "nodemon index.js",
+    "postinstall": "npm rebuild sqlite3",
+    "build": "echo 'No build step required for Node.js backend'"
   },
   "keywords": [],
   "author": "",
