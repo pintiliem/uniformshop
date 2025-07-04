@@ -2,7 +2,7 @@ services:
   - type: web
     name: uniformshop-backend
     env: node
-    plan: free
+    plan: starter
     buildCommand: npm install
     startCommand: node index.js
     envVars:
@@ -11,10 +11,8 @@ services:
       - key: PORT
         value: 10000
 
-  - type: web
+  - type: static
     name: uniformshop-frontend
-    env: static
-    plan: free
     buildCommand: cd client && npm install && npm run build
     staticPublishPath: ./client/build
     envVars:
