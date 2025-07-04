@@ -5,7 +5,13 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+// Configure CORS to allow requests from your frontend domain
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://uniformshop.onrender.com', 'https://uniformshop-be.onrender.com']
+    : ['http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Initialize SQLite database
@@ -40,14 +46,6 @@ app.post('/api/appointment', (req, res) => {
   // Enforce max one appointment per date and time-room
   const checks = [];
   appointment_dates.forEach(date => {
-    
-    //added for deployment
-    const path = require('path');
-    app.use(express.static(path.join(__dirname, 'client', 'build')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
-    });
-
     appointment_hours.forEach(hourRoom => {
       checks.push(new Promise((resolve, reject) => {
         db.all(
@@ -164,6 +162,17 @@ app.get('/api/appointments/count', (req, res) => {
     res.json({ count: row.count });
   });
 });
+
+// Serve static files from the React app (for production deployment)
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  app.use(express.static(path.join(__dirname, 'client', 'build')));
+  
+  // Handle React routing, return all requests to React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client', 'build', 'index.html'));
+  });
+}
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);

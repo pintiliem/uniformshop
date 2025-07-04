@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
+// API base URL - use environment variable in production, localhost in development
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
 function App() {
   const [parentName, setParentName] = useState('');
   const [email, setEmail] = useState('');
@@ -41,7 +44,7 @@ function App() {
     // Fetch all appointments on mount
     const fetchAppointments = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/appointments', { method: 'POST' });
+        const res = await fetch(`${API_BASE_URL}/api/appointments`, { method: 'POST' });
         const data = await res.json();
         setAppointments(Array.isArray(data) ? data : []);
       } catch {
@@ -52,7 +55,7 @@ function App() {
     // Fetch total count
     const fetchCount = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/appointments/count');
+        const res = await fetch(`${API_BASE_URL}/api/appointments/count`);
         const data = await res.json();
         setTotalCount(data.count);
       } catch {
@@ -74,7 +77,7 @@ function App() {
     setLoading(true);
     setMessage('');
     try {
-      const res = await fetch('http://localhost:3001/api/appointment', {
+      const res = await fetch(`${API_BASE_URL}/api/appointment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parent_name: parentName, email, child_name: childName, child_grade: childGrade, appointment_dates: appointmentDates, appointment_hours: selectedHours }),
@@ -91,7 +94,7 @@ function App() {
         // Refresh appointments and count
         const fetchAppointments = async () => {
           try {
-            const res = await fetch('http://localhost:3001/api/appointments', { method: 'POST' });
+            const res = await fetch(`${API_BASE_URL}/api/appointments`, { method: 'POST' });
             const data = await res.json();
             setAppointments(Array.isArray(data) ? data : []);
           } catch {
@@ -100,7 +103,7 @@ function App() {
         };
         const fetchCount = async () => {
           try {
-            const res = await fetch('http://localhost:3001/api/appointments/count');
+            const res = await fetch(`${API_BASE_URL}/api/appointments/count`);
             const data = await res.json();
             setTotalCount(data.count);
           } catch {

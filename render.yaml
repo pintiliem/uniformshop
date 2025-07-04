@@ -18,4 +18,4 @@ services:
     staticPublishPath: ./client/build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://uniformshop-backend.onrender.com 
+        value: https://uniformshop-be.onrender.com 
