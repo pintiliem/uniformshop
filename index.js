@@ -7,7 +7,41 @@ const port = process.env.PORT || 3001;
 
 // Add a simple health check endpoint for Railway
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  // Check if database is initialized
+  if (!db) {
+    console.error('Health check failed - database not initialized');
+    return res.status(503).json({ 
+      status: 'ERROR', 
+      timestamp: new Date().toISOString(),
+      error: 'Database not initialized'
+    });
+  }
+  
+  // Check database connectivity
+  db.get('SELECT 1 as test', [], (err, row) => {
+    if (err) {
+      console.error('Health check failed - database error:', err);
+      return res.status(503).json({ 
+        status: 'ERROR', 
+        timestamp: new Date().toISOString(),
+        error: 'Database connection failed'
+      });
+    }
+    res.status(200).json({ 
+      status: 'OK', 
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  });
+});
+
+// Add a simple ping endpoint for basic health checks
+app.get('/ping', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'Server is running'
+  });
 });
 
 // Configure CORS to allow requests from your frontend domain
@@ -20,13 +54,19 @@ app.use(cors({
 app.use(express.json());
 
 // Initialize SQLite database
-const db = new sqlite3.Database(process.env.DATABASE_URL || './appointments.db', (err) => {
-  if (err) {
-    console.error('Could not connect to database', err);
-  } else {
-    console.log('Connected to SQLite database');
-  }
-});
+let db;
+try {
+  db = new sqlite3.Database(process.env.DATABASE_URL || './appointments.db', (err) => {
+    if (err) {
+      console.error('Could not connect to database', err);
+    } else {
+      console.log('Connected to SQLite database');
+    }
+  });
+} catch (error) {
+  console.error('Failed to initialize database:', error);
+  db = null;
+}
 
 db.run(`CREATE TABLE IF NOT EXISTS appointments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,6 +208,8 @@ app.get('/api/appointments/count', (req, res) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Health check available at: http://0.0.0.0:${port}/health`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 }); 
