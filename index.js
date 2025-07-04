@@ -3,13 +3,13 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
 
 // Initialize SQLite database
-const db = new sqlite3.Database('./appointments.db', (err) => {
+const db = new sqlite3.Database(process.env.DATABASE_URL || './appointments.db', (err) => {
   if (err) {
     console.error('Could not connect to database', err);
   } else {
