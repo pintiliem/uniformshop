@@ -11,8 +11,9 @@ services:
       - key: PORT
         value: 10000
 
-  - type: static
+  - type: web
     name: uniformshop-frontend
+    env: static
     buildCommand: cd client && npm install && npm run build
     staticPublishPath: ./client/build
     envVars:
