@@ -5,28 +5,23 @@ const { Pool } = require('pg');
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Add comprehensive debugging for Railway deployment
-console.log('Starting server with configuration:');
-console.log('PORT:', process.env.PORT);
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+// Server configuration logging
+console.log('Starting server...');
+console.log('PORT:', process.env.PORT || 3001);
 
-// Add a simple health check endpoint for Railway
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
-    timestamp: new Date().toISOString(),
-    port: port,
-    nodeEnv: process.env.NODE_ENV
+    timestamp: new Date().toISOString()
   });
 });
 
-// Add a root endpoint for basic connectivity testing
+// Root endpoint
 app.get('/', (req, res) => {
   res.status(200).json({ 
     message: 'Uniform Shop API is running',
-    timestamp: new Date().toISOString(),
-    port: port
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -40,20 +35,20 @@ app.use(cors({
 app.use(express.json());
 
 // Initialize PostgreSQL database
-console.log('Attempting to connect to PostgreSQL database...');
+console.log('Connecting to database...');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Test database connection
+// Test database connection and create table
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('Database connection failed:', err);
     process.exit(1);
   } else {
-    console.log('Connected to PostgreSQL database successfully');
+    console.log('Database connected successfully');
     
     // Create table if it doesn't exist
     const createTableQuery = `
@@ -73,7 +68,7 @@ pool.query('SELECT NOW()', (err, res) => {
       if (err) {
         console.error('Error creating table:', err);
       } else {
-        console.log('Database table created/verified successfully');
+        console.log('Table ready');
       }
     });
   }
@@ -240,8 +235,6 @@ app.get('/api/appointments/count', (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Health check available at: http://localhost:${port}/health`);
-  console.log(`API root available at: http://localhost:${port}/`);
 });
 
 // Add error handling for uncaught exceptions
