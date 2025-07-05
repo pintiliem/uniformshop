@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const initSqlJs = require('sql.js');
+const { Pool } = require('pg');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -39,39 +39,44 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Initialize SQLite database
-console.log('Attempting to connect to database...');
+// Initialize PostgreSQL database
+console.log('Attempting to connect to PostgreSQL database...');
 
-let db;
-let SQL;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// Initialize sql.js
-initSqlJs({
-  locateFile: file => `https://sql.js.org/dist/${file}`
-}).then(function(sql) {
-  SQL = sql;
-  console.log('SQL.js initialized successfully');
-  
-  // Create in-memory database for Railway deployment
-  db = new SQL.Database();
-  console.log('Connected to in-memory SQLite database');
-  
-  // Create table if it doesn't exist
-  db.run(`CREATE TABLE IF NOT EXISTS appointments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    parent_name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    child_name TEXT,
-    child_grade TEXT,
-    appointment_dates TEXT,
-    appointment_hours TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  
-  console.log('Database table created successfully');
-}).catch(function(err) {
-  console.error('Failed to initialize SQL.js:', err);
-  process.exit(1);
+// Test database connection
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Database connection failed:', err);
+    process.exit(1);
+  } else {
+    console.log('Connected to PostgreSQL database successfully');
+    
+    // Create table if it doesn't exist
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS appointments (
+        id SERIAL PRIMARY KEY,
+        parent_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        child_name VARCHAR(255),
+        child_grade VARCHAR(50),
+        appointment_dates TEXT,
+        appointment_hours TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    
+    pool.query(createTableQuery, (err, res) => {
+      if (err) {
+        console.error('Error creating table:', err);
+      } else {
+        console.log('Database table created/verified successfully');
+      }
+    });
+  }
 });
 
 // Create appointment endpoint
@@ -84,104 +89,91 @@ app.post('/api/appointment', (req, res) => {
     return res.status(400).json({ error: 'At least one date and one hour must be selected.' });
   }
   
-  if (!db) {
-    return res.status(503).json({ error: 'Database not initialized yet.' });
-  }
-  
-  try {
-    // Enforce max one appointment per date and time-room
-    const result = db.exec('SELECT appointment_dates, appointment_hours FROM appointments');
-    let taken = false;
+  // Check for conflicts first
+  pool.query('SELECT appointment_dates, appointment_hours FROM appointments', (err, result) => {
+    if (err) {
+      console.error('Error checking appointments:', err);
+      return res.status(500).json({ error: 'Failed to check slot availability.' });
+    }
     
-    if (result.length > 0) {
-      const rows = result[0].values;
-      for (const row of rows) {
-        let apptDates = [];
-        let apptHours = [];
-        try { apptDates = JSON.parse(row[0]); } catch {}
-        try { apptHours = JSON.parse(row[1]); } catch {}
-        
-        for (const date of appointment_dates) {
-          for (const hourRoom of appointment_hours) {
-            if (apptDates.includes(date) && apptHours.includes(hourRoom)) {
-              taken = true;
-              break;
-            }
+    let taken = false;
+    for (const row of result.rows) {
+      let apptDates = [];
+      let apptHours = [];
+      try { apptDates = JSON.parse(row.appointment_dates); } catch {}
+      try { apptHours = JSON.parse(row.appointment_hours); } catch {}
+      
+      for (const date of appointment_dates) {
+        for (const hourRoom of appointment_hours) {
+          if (apptDates.includes(date) && apptHours.includes(hourRoom)) {
+            taken = true;
+            break;
           }
-          if (taken) break;
         }
         if (taken) break;
       }
+      if (taken) break;
     }
     
     if (taken) {
       return res.status(400).json({ error: 'One or more selected slots are already taken.' });
     }
     
-    const stmt = db.prepare('INSERT INTO appointments (parent_name, email, child_name, child_grade, appointment_dates, appointment_hours) VALUES (?, ?, ?, ?, ?, ?)');
-    stmt.run([
+    // Insert the appointment
+    const insertQuery = `
+      INSERT INTO appointments (parent_name, email, child_name, child_grade, appointment_dates, appointment_hours)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+    `;
+    
+    pool.query(insertQuery, [
       parent_name,
       email,
       child_name || '',
       child_grade || '',
       JSON.stringify(appointment_dates),
       JSON.stringify(appointment_hours)
-    ]);
-    stmt.free();
-    
-    // Get the inserted ID
-    const idResult = db.exec('SELECT last_insert_rowid()');
-    const id = idResult[0].values[0][0];
-    
-    res.status(201).json({ 
-      id: id, 
-      parent_name, 
-      email, 
-      child_name, 
-      child_grade, 
-      appointment_dates, 
-      appointment_hours 
+    ], (err, result) => {
+      if (err) {
+        console.error('Error creating appointment:', err);
+        return res.status(500).json({ error: 'Failed to create appointment.' });
+      }
+      
+      res.status(201).json({ 
+        id: result.rows[0].id, 
+        parent_name, 
+        email, 
+        child_name, 
+        child_grade, 
+        appointment_dates, 
+        appointment_hours 
+      });
     });
-    
-  } catch (error) {
-    console.error('Error creating appointment:', error);
-    res.status(500).json({ error: 'Failed to create appointment.' });
-  }
+  });
 });
 
 // List all appointments endpoint
 app.post('/api/appointments', (req, res) => {
-  if (!db) {
-    return res.status(503).json({ error: 'Database not initialized yet.' });
-  }
+  const query = 'SELECT id, parent_name, email, child_name, child_grade, appointment_dates, appointment_hours, created_at FROM appointments ORDER BY created_at DESC';
   
-  try {
-    const result = db.exec('SELECT id, parent_name, email, child_name, child_grade, appointment_dates, appointment_hours, created_at FROM appointments ORDER BY created_at DESC');
-    
-    if (result.length === 0) {
-      return res.json([]);
+  pool.query(query, (err, result) => {
+    if (err) {
+      console.error('Error fetching appointments:', err);
+      return res.status(500).json({ error: 'Failed to fetch appointments.' });
     }
     
-    const rows = result[0].values.map(row => ({
-      id: row[0],
-      parent_name: row[1],
-      email: row[2],
-      child_name: row[3],
-      child_grade: row[4],
+    const rows = result.rows.map(row => ({
+      ...row,
       appointment_dates: (() => {
-        try { return JSON.parse(row[5]); } catch { return []; }
+        try { return JSON.parse(row.appointment_dates); } catch { return []; }
       })(),
       appointment_hours: (() => {
-        try { return JSON.parse(row[6]); } catch { return []; }
-      })(),
-      created_at: row[7]
+        try { return JSON.parse(row.appointment_hours); } catch { return []; }
+      })()
     }));
     
     res.json(rows);
-  } catch (error) {
-    console.error('Error fetching appointments:', error);
-    res.status(500).json({ error: 'Failed to fetch appointments.' });
-  }
+  });
 });
 
 // Endpoint to get appointment counts for each date/hour
@@ -191,13 +183,11 @@ app.post('/api/appointments/counts', (req, res) => {
     return res.status(400).json({ error: 'dates and hours must be arrays.' });
   }
   
-  if (!db) {
-    return res.status(503).json({ error: 'Database not initialized yet.' });
-  }
-  
-  try {
-    // Query all appointments
-    const result = db.exec('SELECT appointment_dates, appointment_hours FROM appointments');
+  pool.query('SELECT appointment_dates, appointment_hours FROM appointments', (err, result) => {
+    if (err) {
+      console.error('Error fetching appointment counts:', err);
+      return res.status(500).json({ error: 'Failed to fetch appointments.' });
+    }
     
     // Build count map
     const counts = {};
@@ -208,59 +198,44 @@ app.post('/api/appointments/counts', (req, res) => {
       });
     });
     
-    if (result.length > 0) {
-      const rows = result[0].values;
-      rows.forEach(row => {
-        let apptDates = [];
-        let apptHours = [];
-        try { apptDates = JSON.parse(row[0]); } catch {}
-        try { apptHours = JSON.parse(row[1]); } catch {}
-        apptDates.forEach(date => {
-          apptHours.forEach(hour => {
-            if (counts[date] && counts[date][hour] !== undefined) {
-              counts[date][hour]++;
-            }
-          });
+    result.rows.forEach(row => {
+      let apptDates = [];
+      let apptHours = [];
+      try { apptDates = JSON.parse(row.appointment_dates); } catch {}
+      try { apptHours = JSON.parse(row.appointment_hours); } catch {}
+      apptDates.forEach(date => {
+        apptHours.forEach(hour => {
+          if (counts[date] && counts[date][hour] !== undefined) {
+            counts[date][hour]++;
+          }
         });
       });
-    }
+    });
     
     res.json(counts);
-  } catch (error) {
-    console.error('Error fetching appointment counts:', error);
-    res.status(500).json({ error: 'Failed to fetch appointments.' });
-  }
+  });
 });
 
 // Endpoint to delete all appointments (for admin/testing)
 app.post('/api/appointments/delete-all', (req, res) => {
-  if (!db) {
-    return res.status(503).json({ error: 'Database not initialized yet.' });
-  }
-  
-  try {
-    db.run('DELETE FROM appointments');
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting appointments:', error);
-    res.status(500).json({ error: 'Failed to delete appointments.' });
-  }
+  pool.query('DELETE FROM appointments', (err, result) => {
+    if (err) {
+      console.error('Error deleting appointments:', err);
+      return res.status(500).json({ error: 'Failed to delete appointments.' });
+    }
+    res.json({ success: true, deletedCount: result.rowCount });
+  });
 });
 
 // Endpoint to get total number of appointments
 app.get('/api/appointments/count', (req, res) => {
-  if (!db) {
-    return res.status(503).json({ error: 'Database not initialized yet.' });
-  }
-  
-  try {
-    const result = db.exec('SELECT COUNT(*) as count FROM appointments');
-    const count = result.length > 0 ? result[0].values[0][0] : 0;
-    res.json({ count: count });
-  } catch (error) {
-    console.error('Error fetching appointment count:', error);
-    res.status(500).json({ error: 'Failed to fetch count.' });
-  }
+  pool.query('SELECT COUNT(*) as count FROM appointments', (err, result) => {
+    if (err) {
+      console.error('Error fetching appointment count:', err);
+      return res.status(500).json({ error: 'Failed to fetch count.' });
+    }
+    res.json({ count: parseInt(result.rows[0].count) });
+  });
 });
 
 app.listen(port, () => {
