@@ -44,14 +44,21 @@ console.log('Attempting to connect to database...');
 const dbPath = process.env.DATABASE_URL || './appointments.db';
 console.log('Database path:', dbPath);
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Could not connect to database', err);
-    console.error('Database error details:', err.message);
-  } else {
-    console.log('Connected to SQLite database successfully');
-  }
-});
+let db;
+try {
+  db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Could not connect to database', err);
+      console.error('Database error details:', err.message);
+    } else {
+      console.log('Connected to SQLite database successfully');
+    }
+  });
+} catch (error) {
+  console.error('Failed to initialize SQLite database:', error);
+  console.error('This might be due to missing build tools or incompatible binary');
+  process.exit(1);
+}
 
 db.run(`CREATE TABLE IF NOT EXISTS appointments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
