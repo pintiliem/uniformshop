@@ -2,75 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 
-console.log('Starting server initialization...');
-console.log('Environment variables:', {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  FRONTEND_URL: process.env.FRONTEND_URL
-});
-
-// Add error handlers
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
-
 const app = express();
 const port = process.env.PORT || 3001;
 
-console.log(`Server will start on port: ${port}`);
+// Add comprehensive debugging for Railway deployment
+console.log('Starting server with configuration:');
+console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 
 // Add a simple health check endpoint for Railway
 app.get('/health', (req, res) => {
-  // Check if database is initialized
-  if (!db) {
-    console.error('Health check failed - database not initialized');
-    return res.status(503).json({ 
-      status: 'ERROR', 
-      timestamp: new Date().toISOString(),
-      error: 'Database not initialized'
-    });
-  }
-  
-  // Check database connectivity
-  db.get('SELECT 1 as test', [], (err, row) => {
-    if (err) {
-      console.error('Health check failed - database error:', err);
-      return res.status(503).json({ 
-        status: 'ERROR', 
-        timestamp: new Date().toISOString(),
-        error: 'Database connection failed'
-      });
-    }
-    res.status(200).json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      database: 'connected'
-    });
-  });
-});
-
-// Add a simple ping endpoint for basic health checks
-app.get('/ping', (req, res) => {
-  console.log('Ping request received');
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    message: 'Server is running'
+    port: port,
+    nodeEnv: process.env.NODE_ENV
   });
 });
 
-// Add a root endpoint for basic connectivity
+// Add a root endpoint for basic connectivity testing
 app.get('/', (req, res) => {
   res.status(200).json({ 
-    status: 'OK', 
+    message: 'Uniform Shop API is running',
     timestamp: new Date().toISOString(),
-    message: 'Uniform Shop API is running'
+    port: port
   });
 });
 
@@ -84,19 +40,18 @@ app.use(cors({
 app.use(express.json());
 
 // Initialize SQLite database
-let db;
-try {
-  db = new sqlite3.Database(process.env.DATABASE_URL || './appointments.db', (err) => {
-    if (err) {
-      console.error('Could not connect to database', err);
-    } else {
-      console.log('Connected to SQLite database');
-    }
-  });
-} catch (error) {
-  console.error('Failed to initialize database:', error);
-  db = null;
-}
+console.log('Attempting to connect to database...');
+const dbPath = process.env.DATABASE_URL || './appointments.db';
+console.log('Database path:', dbPath);
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('Could not connect to database', err);
+    console.error('Database error details:', err.message);
+  } else {
+    console.log('Connected to SQLite database successfully');
+  }
+});
 
 db.run(`CREATE TABLE IF NOT EXISTS appointments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,15 +193,19 @@ app.get('/api/appointments/count', (req, res) => {
   });
 });
 
-try {
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`✅ Server successfully started on port ${port}`);
-    console.log(`🌐 Health check available at: http://0.0.0.0:${port}/`);
-    console.log(`🔍 Ping endpoint available at: http://0.0.0.0:${port}/ping`);
-    console.log(`🏥 Health endpoint available at: http://0.0.0.0:${port}/health`);
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  });
-} catch (error) {
-  console.error('❌ Failed to start server:', error);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`Health check available at: http://localhost:${port}/health`);
+  console.log(`API root available at: http://localhost:${port}/`);
+});
+
+// Add error handling for uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
   process.exit(1);
-} 
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+}); 
