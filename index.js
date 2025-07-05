@@ -2,8 +2,28 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 
+console.log('Starting server initialization...');
+console.log('Environment variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  FRONTEND_URL: process.env.FRONTEND_URL
+});
+
+// Add error handlers
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 const app = express();
 const port = process.env.PORT || 3001;
+
+console.log(`Server will start on port: ${port}`);
 
 // Add a simple health check endpoint for Railway
 app.get('/health', (req, res) => {
@@ -37,10 +57,20 @@ app.get('/health', (req, res) => {
 
 // Add a simple ping endpoint for basic health checks
 app.get('/ping', (req, res) => {
+  console.log('Ping request received');
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     message: 'Server is running'
+  });
+});
+
+// Add a root endpoint for basic connectivity
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'Uniform Shop API is running'
   });
 });
 
@@ -208,8 +238,15 @@ app.get('/api/appointments/count', (req, res) => {
   });
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on port ${port}`);
-  console.log(`Health check available at: http://0.0.0.0:${port}/health`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-}); 
+try {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ Server successfully started on port ${port}`);
+    console.log(`🌐 Health check available at: http://0.0.0.0:${port}/`);
+    console.log(`🔍 Ping endpoint available at: http://0.0.0.0:${port}/ping`);
+    console.log(`🏥 Health endpoint available at: http://0.0.0.0:${port}/health`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+  process.exit(1);
+} 
